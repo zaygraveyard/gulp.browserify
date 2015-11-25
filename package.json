@@ -1,0 +1,17 @@
+{
+  "name": "gulp.browserify",
+  "version": "0.0.1",
+  "description": "Bundle modules with BrowserifyJS",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Ziad EL KHOURY HANNA <ziad.khoury.h@gmail.com>",
+  "license": "MIT",
+  "dependencies": {
+    "browserify": "^12.0.1",
+    "globby": "^4.0.0",
+    "object-assign": "^4.0.1",
+    "through2": "^2.0.0"
+  }
+}
