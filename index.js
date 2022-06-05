@@ -3,52 +3,84 @@
 var path = require('path');
 var assign = require('object-assign');
 var globby = require('globby');
-var through = require('through2');
-
+var mergeStream = require('merge-stream');
 var browserify = require('browserify');
 
-module.exports = function(glob, options) {
+function gulpBrowserify(glob, options, many) {
+  return wrap(glob, function(entries) {
+    return (many ? bundleMany : bundleOne)(entries, options);
+  });
+}
+
+function wrap(glob, bundleEntries) {
+  var stream = mergeStream();
+
+  globby(glob).then(function(entries) {
+    stream.add(bundleEntries(entries));
+  }, function(err) {
+    stream.emit('error', err);
+  });
+
+  return stream;
+}
+
+function getArgs(entries, options) {
   options = assign({
     basedir: process.cwd()
   }, options);
 
   var requires = options.requires || [];
-  delete options.requires;
-
   var transforms = options.transforms || [];
+
+  delete options.requires;
   delete options.transforms;
 
-  // gulp expects tasks to return a stream, so we create one here.
-  var bundledStream = through();
-
-  // "globby" replaces the normal "gulp.src" as Browserify
-  // creates it's own readable stream.
-  globby(glob).then(function(entries) {
-    var b;
-
-    entries = entries.map(function(entry) {
-      return path.relative(options.basedir, entry);
-    });
-
-    // create the Browserify instance.
-    b = browserify(options);
-
-    transforms.forEach(function(transform) {
-      if (!Array.isArray(transform)) {
-        transform = [transform];
-      }
-      b.transform.apply(b, transform);
-    });
-
-    b.add(entries);
-    b.require(requires);
-
-    // pipe the Browserify stream into the stream we created earlier
-    // this starts our gulp pipeline.
-    b.bundle().pipe(bundledStream);
-  }, function(err) {
-    bundledStream.emit('error', err);
+  if (!Array.isArray(entries)) {
+    entries = [entries];
+  }
+  entries = entries.map(function(entry) {
+    return path.relative(options.basedir, entry);
   });
 
-  return bundledStream;
-};
+  return {
+    entries: entries,
+    requires: requires,
+    transforms: transforms,
+    options: options
+  };
+}
+
+function bundle(entries, requires, transforms, options) {
+  var b;
+
+  b = browserify(options);
+
+  transforms.forEach(function(transform) {
+    if (!Array.isArray(transform)) {
+      transform = [transform];
+    }
+    b.transform.apply(b, transform);
+  });
+
+  b.add(entries);
+  b.require(requires);
+
+  return b.bundle();
+}
+
+function bundleOne(entries, options) {
+  var args = getArgs(entries, options);
+
+  return bundle(args.entries, args.requires, args.transforms, args.options);
+}
+
+function bundleMany(entries, options) {
+  var args = getArgs(entries, options);
+
+  return args.entries.map(function(entry) {
+    return bundle(entry, args.requires, args.transforms, args.options);
+  });
+}
+
+module.exports = gulpBrowserify;
+module.exports.wrap = wrap;
